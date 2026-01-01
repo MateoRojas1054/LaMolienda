@@ -1,0 +1,11 @@
+services:
+  web:
+    image: php:8.2-apache
+    container_name: lamolienda_web
+    ports:
+      - "8082:80"
+    volumes:
+      - ./src:/var/www/html:rw
+    environment:
+      - APACHE_DOCUMENT_ROOT=/var/www/html
+    restart: unless-stopped
