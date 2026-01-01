@@ -1,8 +1,17 @@
 <?php
+session_start();
 require_once __DIR__ . '/db.php';
 
-// Manejo de formularios: venta del día y gastos
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (!isset($_SESSION['user'])) {
+    header('Location: /login.php');
+    exit;
+}
+
+$user = $_SESSION['user'];
+$is_admin = $user['role'] === 'admin';
+
+// Manejo de formularios: venta del día y gastos (solo admin)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
   $action = $_POST['action'] ?? '';
   $date = $_POST['date'] ?? null; // opcional
   $targetDate = $date ? substr($date,0,10) : (new DateTime())->format('Y-m-d');
@@ -50,7 +59,8 @@ $entries = get_entries_by_date($today);
   <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;max-width:900px;margin:auto}</style>
 </head>
 <body>
-  <h1>LaMolienda — Caja del día (<?php echo htmlspecialchars($today); ?>)</h1>
+  <h1>LaMolienda — Caja del día (<?php echo htmlspecialchars($today); ?>) - Usuario: <?php echo htmlspecialchars($user['username']); ?> (<?php echo $is_admin ? 'Admin' : 'Viewer'; ?>)</h1>
+  <p><a href="/logout.php">Cerrar sesión</a></p>
 
   <div class="cards">
     <div class="card">
@@ -73,22 +83,30 @@ $entries = get_entries_by_date($today);
 
   <section>
     <h2>Registrar venta del día</h2>
+    <?php if ($is_admin): ?>
     <form method="post">
       <input type="hidden" name="action" value="set_sale">
       <label>Fecha (opcional): <input type="date" name="date" value="<?php echo htmlspecialchars($today); ?>"></label>
       <label>Venta total del día: <input name="sale_amount" value="<?php echo htmlspecialchars(number_format($sale_today,2,'.','')); ?>" required></label>
       <button type="submit">Guardar venta</button>
     </form>
+    <?php else: ?>
+    <p>Solo admins pueden registrar ventas.</p>
+    <?php endif; ?>
   </section>
 
   <section>
     <h2>Añadir gasto</h2>
+    <?php if ($is_admin): ?>
     <form method="post">
       <input type="hidden" name="action" value="add_expense">
       <label>Monto: <input name="amount" required></label>
       <label>Fecha (opcional): <input type="date" name="date" value="<?php echo htmlspecialchars($today); ?>"></label>
       <button type="submit">Agregar gasto</button>
     </form>
+    <?php else: ?>
+    <p>Solo admins pueden añadir gastos.</p>
+    <?php endif; ?>
   </section>
 
   <section>

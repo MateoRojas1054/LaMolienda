@@ -1,26 +1,16 @@
 <?php
+session_start();
 require_once __DIR__ . '/db.php';
 
-$month = $_GET['month'] ?? (new DateTime())->format('Y-m');
-$year = substr($month, 0, 4);
-$mon = substr($month, 5, 2);
-$days_in_month = date('t', strtotime($month . '-01'));
-
-$report_data = [];
-for ($day = 1; $day <= $days_in_month; $day++) {
-    $date = sprintf('%04d-%02d-%02d', $year, $mon, $day);
-    $sale_today = get_sale_for_date($date);
-    $sales_accum = get_sales_accumulated_month($date);
-    $expenses_today = get_expenses_total_by_date($date);
-    $balance_favor_month = get_balance_favor_month($date);
-    $report_data[] = [
-        'date' => $date,
-        'sale_today' => $sale_today,
-        'sales_accum' => $sales_accum,
-        'expenses_today' => $expenses_today,
-        'balance_favor' => $balance_favor_month,
-    ];
+if (!isset($_SESSION['user'])) {
+    header('Location: /login.php');
+    exit;
 }
+
+$user = $_SESSION['user'];
+
+$month = $_GET['month'] ?? (new DateTime())->format('Y-m');
+$report_data = get_month_report_data($month);
 ?>
 <!doctype html>
 <html lang="es">
@@ -32,7 +22,8 @@ for ($day = 1; $day <= $days_in_month; $day++) {
   <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;max-width:900px;margin:auto}</style>
 </head>
 <body>
-  <h1>Reporte mensual</h1>
+  <h1>Reporte mensual - Usuario: <?php echo htmlspecialchars($user['username']); ?> (<?php echo $user['role'] === 'admin' ? 'Admin' : 'Viewer'; ?>)</h1>
+  <p><a href="/">Volver</a> | <a href="/logout.php">Cerrar sesión</a></p>
   <form method="get">
     <label>Mes: <input type="month" name="month" value="<?php echo htmlspecialchars($month); ?>"></label>
     <button type="submit">Mostrar</button>

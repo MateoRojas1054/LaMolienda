@@ -17,11 +17,18 @@ function get_db(): PDO {
         created_at TEXT NOT NULL
     )");
 
-    // Tabla para guardar venta del día
-    $pdo->exec("CREATE TABLE IF NOT EXISTS daily_sales (
-        date TEXT PRIMARY KEY,
-        sale_amount NUMERIC NOT NULL
+    // Tabla para usuarios
+    $pdo->exec("CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT NOT NULL -- 'admin' o 'viewer'
     )");
+
+    // Insertar usuarios por defecto si no existen
+    $stmt = $pdo->prepare("INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)");
+    $stmt->execute(['admin', password_hash('admin123', PASSWORD_DEFAULT), 'admin']);
+    $stmt->execute(['viewer', password_hash('viewer123', PASSWORD_DEFAULT), 'viewer']);
 
     return $pdo;
 }
@@ -91,6 +98,56 @@ function get_balance_favor_month(string $date) {
         $total += get_balance_favor_daily($d);
     }
     return $total;
+}
+
+function get_month_report_data(string $month) {
+    $pdo = get_db();
+    $start = $month . '-01';
+    $end = date('Y-m-t', strtotime($start)); // último día del mes
+
+    // Obtener todas las ventas del mes
+    $stmt_sales = $pdo->prepare("SELECT date, sale_amount FROM daily_sales WHERE date BETWEEN :start AND :end ORDER BY date");
+    $stmt_sales->execute([':start' => $start, ':end' => $end]);
+    $sales = $stmt_sales->fetchAll(PDO::FETCH_KEY_PAIR); // date => amount
+
+    // Obtener todos los gastos del mes agrupados por fecha
+    $stmt_expenses = $pdo->prepare("SELECT DATE(created_at) as date, SUM(amount) as total FROM entries WHERE type = 'expense' AND DATE(created_at) BETWEEN :start AND :end GROUP BY DATE(created_at)");
+    $stmt_expenses->execute([':start' => $start, ':end' => $end]);
+    $expenses = $stmt_expenses->fetchAll(PDO::FETCH_KEY_PAIR); // date => total
+
+    $report_data = [];
+    $sales_accum = 0.0;
+    $balance_accum = 0.0;
+    $days_in_month = (int)date('t', strtotime($start));
+
+    for ($day = 1; $day <= $days_in_month; $day++) {
+        $date = sprintf('%s-%02d', $month, $day);
+        $sale_today = $sales[$date] ?? 0.0;
+        $sales_accum += $sale_today;
+        $expenses_today = $expenses[$date] ?? 0.0;
+        $balance_today = $sale_today - $expenses_today;
+        $balance_accum += $balance_today;
+
+        $report_data[] = [
+            'date' => $date,
+            'sale_today' => $sale_today,
+            'sales_accum' => $sales_accum,
+            'expenses_today' => $expenses_today,
+            'balance_favor' => $balance_accum,
+        ];
+    }
+    return $report_data;
+}
+
+function authenticate_user(string $username, string $password) {
+    $pdo = get_db();
+    $stmt = $pdo->prepare('SELECT * FROM users WHERE username = :username');
+    $stmt->execute([':username' => $username]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($user && password_verify($password, $user['password'])) {
+        return $user;
+    }
+    return false;
 }
 
 function get_totals_by_date(string $date) {
